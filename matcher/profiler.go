@@ -13,7 +13,7 @@ import (
 
 type ProfileCmd struct {
 	Path       string `arg:"" required:"" name:"path" help:"Path to CSV profile" type:"path"`
-	SampleSize int    `arg:"" help:"Rows to sample" default:"-1"`
+	SampleSize int    `arg:"" help:"Rows to sample" default:"1000"`
 }
 
 func (p *ProfileCmd) Run() error {
@@ -72,13 +72,13 @@ func runProfile(p ProfileCmd) error {
 	defer db.Close()
 
 	tableName := strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs))
-	query := fmt.Sprintf("CREATE TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, abs)
+	query := fmt.Sprintf("CREATE TEMP TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, abs)
 	_, err = db.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	cps, err := profile(db, tableName)
+	cps, err := profile(db, tableName, p.SampleSize)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func runProfile(p ProfileCmd) error {
 }
 
 // parallelize the queries
-func profile(db *sql.DB, tableName string) ([]ColumnProfile, error) {
+func profile(db *sql.DB, tableName string, sampleSize int) ([]ColumnProfile, error) {
 	cps, err := tableInfo(db, tableName)
 	if err != nil {
 		return []ColumnProfile{}, err
@@ -101,7 +101,7 @@ func profile(db *sql.DB, tableName string) ([]ColumnProfile, error) {
 		return []ColumnProfile{}, err
 	}
 
-	cps, err = samples(db, tableName, cps)
+	cps, err = samples(db, tableName, sampleSize, cps)
 	if err != nil {
 		return []ColumnProfile{}, err
 	}
@@ -160,8 +160,8 @@ func pcts(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, e
 	return cps, nil
 }
 
-func samples(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, error) {
-	query := fmt.Sprintf("SELECT * FROM \"%s\" USING SAMPLE 1000 ROWS", tableName)
+func samples(db *sql.DB, tableName string, sampleSize int, cps []ColumnProfile) ([]ColumnProfile, error) {
+	query := fmt.Sprintf("SELECT * FROM \"%s\" USING SAMPLE %d ROWS", tableName, sampleSize)
 	rows, err := db.Query(query)
 	if err != nil {
 		return []ColumnProfile{}, err
