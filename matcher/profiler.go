@@ -161,7 +161,7 @@ func pcts(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, e
 }
 
 func samples(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, error) {
-	query := fmt.Sprintf("SELECT * FROM \"%s\" USING SAMPLE 5 ROWS", tableName)
+	query := fmt.Sprintf("SELECT * FROM \"%s\" USING SAMPLE 1000 ROWS", tableName)
 	rows, err := db.Query(query)
 	if err != nil {
 		return []ColumnProfile{}, err
