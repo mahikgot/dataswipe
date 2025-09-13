@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -30,12 +31,12 @@ func main() {
 }
 
 type ColumnProfile struct {
-	Name        string   `json:"name"`
-	DType       string   `json:"dtype"`
-	NullPct     float64  `json:"null_pct"`
-	UniqueCount float64  `json:"unique_count"`
-	Samples     []string `json:"sample_values"`
-	Stats       any      `json:"stats"`
+	Name      string   `json:"name"`
+	DType     string   `json:"dtype"`
+	NullPct   float64  `json:"null_pct"`
+	UniquePct float64  `json:"unique_pct"`
+	Samples   []string `json:"sample_values"`
+	Stats     any      `json:"stats"`
 }
 
 func (cp ColumnProfile) populateTableInfo(name, dtype string) ColumnProfile {
@@ -44,9 +45,9 @@ func (cp ColumnProfile) populateTableInfo(name, dtype string) ColumnProfile {
 	return cp
 }
 
-func (cp ColumnProfile) populateCounts(nullPct, uniqueCount float64) ColumnProfile {
+func (cp ColumnProfile) populatePcts(nullPct, uniquePct float64) ColumnProfile {
 	cp.NullPct = nullPct
-	cp.UniqueCount = uniqueCount
+	cp.UniquePct = uniquePct
 	return cp
 }
 
@@ -71,15 +72,21 @@ func runProfile(p ProfileCmd) error {
 	defer db.Close()
 
 	tableName := strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs))
-	query := fmt.Sprintf("CREATE TABLE %s AS FROM '%s'", tableName, abs)
+	query := fmt.Sprintf("CREATE TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, abs)
 	_, err = db.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	// todo save cps
-	_, err = profile(db, tableName)
-	return err
+	cps, err := profile(db, tableName)
+	if err != nil {
+		return err
+	}
+
+	data, _ := json.Marshal(cps)
+	fmt.Println(string(data))
+
+	return nil
 }
 
 // parallelize the queries
@@ -89,7 +96,7 @@ func profile(db *sql.DB, tableName string) ([]ColumnProfile, error) {
 		return []ColumnProfile{}, err
 	}
 
-	cps, err = counts(db, tableName, cps)
+	cps, err = pcts(db, tableName, cps)
 	if err != nil {
 		return []ColumnProfile{}, err
 	}
@@ -97,11 +104,6 @@ func profile(db *sql.DB, tableName string) ([]ColumnProfile, error) {
 	cps, err = samples(db, tableName, cps)
 	if err != nil {
 		return []ColumnProfile{}, err
-	}
-
-	// todo change to log
-	for _, cp := range cps {
-		fmt.Println(cp)
 	}
 
 	return cps, nil
@@ -128,12 +130,12 @@ func tableInfo(db *sql.DB, tableName string) ([]ColumnProfile, error) {
 	return cps, nil
 }
 
-func counts(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, error) {
+func pcts(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile, error) {
 	var parts []string
 	for _, cp := range cps {
 		col := cp.Name
 		parts = append(parts,
-			fmt.Sprintf("COUNT(DISTINCT \"%s\") AS \"%s_unique\"", col, col),
+			fmt.Sprintf("100.0 * COUNT(DISTINCT \"%s\") / COUNT(\"%s\") AS \"%s_unique_pct\"", col, col, col),
 			fmt.Sprintf("100.0 * SUM(CASE WHEN \"%s\" IS NULL THEN 1 ELSE 0 END)/COUNT(*) AS \"%s_null_pct\"", col, col),
 		)
 	}
@@ -150,9 +152,9 @@ func counts(db *sql.DB, tableName string, cps []ColumnProfile) ([]ColumnProfile,
 	}
 
 	for j, cp := range cps {
-		unique := *(vals[2*j].(*float64))
+		uniquePct := *(vals[2*j].(*float64))
 		nullPct := *(vals[2*j+1].(*float64))
-		cps[j] = cp.populateCounts(nullPct, unique)
+		cps[j] = cp.populatePcts(nullPct, uniquePct)
 	}
 
 	return cps, nil
