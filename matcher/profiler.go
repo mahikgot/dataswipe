@@ -45,7 +45,6 @@ func (cp ColumnProfile) populateTableInfo(name, dtype string) ColumnProfile {
 }
 
 func (cp ColumnProfile) populateCounts(nullPct, uniqueCount float64) ColumnProfile {
-	fmt.Println(nullPct, uniqueCount)
 	cp.NullPct = nullPct
 	cp.UniqueCount = uniqueCount
 	return cp
@@ -78,8 +77,8 @@ func runProfile(p ProfileCmd) error {
 		return err
 	}
 
-	cps, err := profile(db, tableName)
-	fmt.Println(cps)
+	// todo save cps
+	_, err = profile(db, tableName)
 	return err
 }
 
@@ -100,6 +99,7 @@ func profile(db *sql.DB, tableName string) ([]ColumnProfile, error) {
 		return []ColumnProfile{}, err
 	}
 
+	// todo change to log
 	for _, cp := range cps {
 		fmt.Println(cp)
 	}
