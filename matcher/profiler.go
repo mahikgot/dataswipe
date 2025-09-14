@@ -2,37 +2,56 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/alecthomas/kong"
 	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
-type ProfileCmd struct {
-	Path       string `arg:"" required:"" name:"path" help:"Path to CSV profile" type:"path"`
-	SampleSize int    `arg:"" help:"Rows to sample" default:"1000"`
-}
+type Dtype string
 
-func (p *ProfileCmd) Run() error {
-	return runProfile(*p)
-}
+const (
+	BigInt      Dtype = "BIGINT"
+	Bit         Dtype = "BIT"
+	Blob        Dtype = "BLOB"
+	Boolean     Dtype = "BOOLEAN"
+	Date        Dtype = "DATE"
+	Decimal     Dtype = "DECIMAL"
+	Double      Dtype = "DOUBLE"
+	Float       Dtype = "FLOAT"
+	HugeInt     Dtype = "HUGEINT"
+	Integer     Dtype = "INTEGER"
+	Interval    Dtype = "INTERVAL"
+	JSON        Dtype = "JSON"
+	SmallInt    Dtype = "SMALLINT"
+	Time        Dtype = "TIME"
+	TimestampTZ Dtype = "TIMESTAMP WITH TIME ZONE"
+	Timestamp   Dtype = "TIMESTAMP"
+	TinyInt     Dtype = "TINYINT"
+	UBigInt     Dtype = "UBIGINT"
+	UHugeInt    Dtype = "UHUGEINT"
+	UInteger    Dtype = "UINTEGER"
+	USmallInt   Dtype = "USMALLINT"
+	UTinyInt    Dtype = "UTINYINT"
+	UUID        Dtype = "UUID"
+	VarChar     Dtype = "VARCHAR"
+)
 
-var cli struct {
-	Profile ProfileCmd `cmd:"" help:"Create a profile for CSV"`
-}
-
-func main() {
-	ctx := kong.Parse(&cli)
-	err := ctx.Run()
-	ctx.FatalIfErrorf(err)
+func IsValidDuckDBType(t Dtype) bool {
+	switch t {
+	case BigInt, Bit, Blob, Boolean, Date, Decimal, Double, Float,
+		HugeInt, Integer, Interval, JSON, SmallInt, Time, TimestampTZ,
+		Timestamp, TinyInt, UBigInt, UHugeInt, UInteger, USmallInt,
+		UTinyInt, UUID, VarChar:
+		return true
+	}
+	return false
 }
 
 type ColumnProfile struct {
 	Name      string   `json:"name"`
-	DType     string   `json:"dtype"`
+	DType     Dtype    `json:"dtype"`
 	NullPct   float64  `json:"null_pct"`
 	UniquePct float64  `json:"unique_pct"`
 	Samples   []string `json:"sample_values"`
@@ -41,7 +60,10 @@ type ColumnProfile struct {
 
 func (cp ColumnProfile) populateTableInfo(name, dtype string) ColumnProfile {
 	cp.Name = name
-	cp.DType = dtype
+	if IsValidDuckDBType(Dtype(dtype)) {
+		cp.DType = Dtype(dtype)
+	}
+
 	return cp
 }
 
@@ -59,15 +81,15 @@ func (cp ColumnProfile) populateSamples(samples []any) ColumnProfile {
 	return cp
 }
 
-func runProfile(p ProfileCmd) error {
+func runProfile(p ProfileCmd) ([]ColumnProfile, error) {
 	abs, err := resolvePath(p.Path)
 	if err != nil {
-		return err
+		return []ColumnProfile{}, err
 	}
 
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return err
+		return []ColumnProfile{}, err
 	}
 	defer db.Close()
 
@@ -75,18 +97,15 @@ func runProfile(p ProfileCmd) error {
 	query := fmt.Sprintf("CREATE TEMP TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, abs)
 	_, err = db.Exec(query)
 	if err != nil {
-		return err
+		return []ColumnProfile{}, err
 	}
 
 	cps, err := profile(db, tableName, p.SampleSize)
 	if err != nil {
-		return err
+		return []ColumnProfile{}, err
 	}
 
-	data, _ := json.Marshal(cps)
-	fmt.Println(string(data))
-
-	return nil
+	return cps, nil
 }
 
 // parallelize the queries
@@ -184,16 +203,4 @@ func samples(db *sql.DB, tableName string, sampleSize int, cps []ColumnProfile) 
 		cps[i] = cps[i].populateSamples(samples)
 	}
 	return cps, nil
-}
-
-func resolvePath(path string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-
-	if filepath.Ext(abs) != ".csv" {
-		return "", fmt.Errorf("not a CSV file: %s", abs)
-	}
-	return abs, nil
 }
