@@ -10,15 +10,35 @@ import (
 
 var cli struct {
 	Profile ProfileCmd `cmd:"" help:"Create a profile for CSV"`
+	Match   MatchCmd   `cmd:"" help:"Get column match scores for two CSV files"`
 }
 
 type ProfileCmd struct {
 	Path       string `arg:"" required:"" name:"path" help:"Path to CSV profile" type:"path"`
-	SampleSize int    `arg:"" help:"Rows to sample" default:"1000"`
+	SampleSize int    `arg:"" help:"Rows to sample" default:"5"`
 }
 
 func (p *ProfileCmd) Run() error {
 	cps, err := runProfile(*p)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(cps)
+	fmt.Println(string(data))
+
+	return err
+}
+
+type MatchCmd struct {
+	LeftPath   string `arg:"" name:"left" help:"Left CSV file" type:"path"`
+	RightPath  string `arg:"" name:"right" help:"Right CSV file" type:"path"`
+	SampleSize int    `arg:"" help:"Rows to sample" default:"5"`
+}
+
+// TODO parallelize
+func (m *MatchCmd) Run() error {
+	cps, err := runMatch(*m)
 	if err != nil {
 		return err
 	}

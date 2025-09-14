@@ -82,13 +82,21 @@ func (cp ColumnProfile) populateSamples(samples []any) ColumnProfile {
 }
 
 func runProfile(p ProfileCmd) ([]ColumnProfile, error) {
-	filename, err := filename(p.Path)
+	return profilePath(p.Path, p.SampleSize)
+}
+
+func profilePath(path string, sampleSize int) ([]ColumnProfile, error) {
+	filename, err := filename(path)
 	if err != nil {
 		return nil, err
 	}
 	db, err := prepareDB(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
 
-	cps, err := profile(db, filename, p.SampleSize)
+	cps, err := profile(db, filename, sampleSize)
 	if err != nil {
 		return []ColumnProfile{}, err
 	}
@@ -101,7 +109,6 @@ func prepareDB(filename string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	tableName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 	query := fmt.Sprintf("CREATE TEMP TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, filename)
