@@ -56,6 +56,10 @@ func matchProfile(leftCps, rightCps []ColumnProfile) []ColumnProfilePairScores {
 			if _, exists := scores[cpp]; exists {
 				continue
 			}
+			cppInversed := NewColumnProfilePair(right, left)
+			if _, exists := scores[cppInversed]; exists {
+				continue
+			}
 			scores[cpp] = match(left, right)
 		}
 	}
