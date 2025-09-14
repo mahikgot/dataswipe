@@ -82,25 +82,13 @@ func (cp ColumnProfile) populateSamples(samples []any) ColumnProfile {
 }
 
 func runProfile(p ProfileCmd) ([]ColumnProfile, error) {
-	abs, err := resolvePath(p.Path)
+	filename, err := filename(p.Path)
 	if err != nil {
-		return []ColumnProfile{}, err
+		return nil, err
 	}
+	db, err := prepareDB(filename)
 
-	db, err := sql.Open("duckdb", "")
-	if err != nil {
-		return []ColumnProfile{}, err
-	}
-	defer db.Close()
-
-	tableName := strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs))
-	query := fmt.Sprintf("CREATE TEMP TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, abs)
-	_, err = db.Exec(query)
-	if err != nil {
-		return []ColumnProfile{}, err
-	}
-
-	cps, err := profile(db, tableName, p.SampleSize)
+	cps, err := profile(db, filename, p.SampleSize)
 	if err != nil {
 		return []ColumnProfile{}, err
 	}
@@ -108,8 +96,27 @@ func runProfile(p ProfileCmd) ([]ColumnProfile, error) {
 	return cps, nil
 }
 
+func prepareDB(filename string) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	tableName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+	query := fmt.Sprintf("CREATE TEMP TABLE \"%s\" AS SELECT * FROM read_csv(\"%s\", nullstr = ['null', \"''\"], null_padding = true)", tableName, filename)
+	_, err = db.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
 // parallelize the queries
-func profile(db *sql.DB, tableName string, sampleSize int) ([]ColumnProfile, error) {
+func profile(db *sql.DB, filename string, sampleSize int) ([]ColumnProfile, error) {
+	tableName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+
 	cps, err := tableInfo(db, tableName)
 	if err != nil {
 		return []ColumnProfile{}, err

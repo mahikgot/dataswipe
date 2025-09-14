@@ -13,7 +13,6 @@ var cli struct {
 }
 
 type ProfileCmd struct {
-	Match      bool   `default:"false"`
 	Path       string `arg:"" required:"" name:"path" help:"Path to CSV profile" type:"path"`
 	SampleSize int    `arg:"" help:"Rows to sample" default:"1000"`
 }
@@ -36,7 +35,7 @@ func main() {
 	ctx.FatalIfErrorf(err)
 }
 
-func resolvePath(path string) (string, error) {
+func filename(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
