@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"math"
 	"sort"
+	"strings"
+
+	lev "github.com/texttheater/golang-levenshtein/levenshtein"
 )
 
 type ColumnProfileID string
@@ -76,8 +79,52 @@ func matchProfile(leftCps, rightCps []ColumnProfile) []ColumnProfilePairScores {
 func match(left, right ColumnProfile) ColumnProfilePairScores {
 	typeScore := baseTypeScore(left.DType, right.DType)
 	nullScore := nullSimilarityScore(left.NullPct, right.NullPct)
-	score := typeScore * nullScore
+	uniqueScore := uniqueScore(left.UniquePct, right.UniquePct)
+	overlapScore := overlapScore(left.Samples, right.Samples, 0.8)
+	columnNameScore := columnNameScore(left.Name, right.Name)
+	score := 0.3*columnNameScore + 0.25*typeScore + 0.2*uniqueScore + 0.15*overlapScore + 0.1*nullScore
 	return ColumnProfilePairScores{score, left, right}
+}
+
+func overlapScore(left, right []string, threshold float64) float64 {
+	set1 := make(map[string]struct{})
+	for _, v := range left {
+		set1[strings.ToLower(strings.TrimSpace(v))] = struct{}{}
+	}
+	set2 := make(map[string]struct{})
+	for _, v := range right {
+		set2[strings.ToLower(strings.TrimSpace(v))] = struct{}{}
+	}
+
+	intersect := 0
+	union := make(map[string]struct{})
+
+	for v1 := range set1 {
+		union[v1] = struct{}{}
+		for v2 := range set2 {
+			union[v2] = struct{}{}
+			dist := lev.DistanceForStrings([]rune(v1), []rune(v2), lev.DefaultOptions)
+			maxLen := float64(len(v1))
+			if len(v2) > len(v1) {
+				maxLen = float64(len(v2))
+			}
+			score := 1.0 - float64(dist)/maxLen
+			if score >= threshold {
+				intersect++
+				break // count one fuzzy match per value
+			}
+		}
+	}
+
+	if len(union) == 0 {
+		return 0.0
+	}
+	return float64(intersect) / float64(len(union))
+}
+
+func uniqueScore(left, right float64) float64 {
+	denom := math.Max(math.Max(left, right), 1e-6)
+	return 1.0 - math.Abs(left-right)/denom
 }
 
 func nullSimilarityScore(left, right float64) float64 {

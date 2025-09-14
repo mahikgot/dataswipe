@@ -6,7 +6,8 @@ toolchain go1.24.7
 
 require (
 	github.com/alecthomas/kong v1.12.1
-	github.com/marcboeker/go-duckdb v1.8.5
+	github.com/marcboeker/go-duckdb/v2 v2.3.6
+	github.com/texttheater/golang-levenshtein/levenshtein v0.0.0-20200805054039-cae8b0eaed6c
 )
 
 require (
@@ -25,7 +26,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/marcboeker/go-duckdb/arrowmapping v0.0.10 // indirect
 	github.com/marcboeker/go-duckdb/mapping v0.0.11 // indirect
-	github.com/marcboeker/go-duckdb/v2 v2.3.6 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect

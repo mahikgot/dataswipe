@@ -24,7 +24,7 @@ func (p *ProfileCmd) Run() error {
 		return err
 	}
 
-	data, err := json.Marshal(cps)
+	data, err := json.MarshalIndent(cps, "", "  ")
 	fmt.Println(string(data))
 
 	return err
@@ -43,7 +43,7 @@ func (m *MatchCmd) Run() error {
 		return err
 	}
 
-	data, err := json.Marshal(cps)
+	data, err := json.MarshalIndent(cps, "", "  ")
 	fmt.Println(string(data))
 
 	return err
