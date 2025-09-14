@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"math"
+	"sort"
 )
 
 type ColumnProfileID string
@@ -61,12 +63,21 @@ func matchProfile(leftCps, rightCps []ColumnProfile) []ColumnProfilePairScores {
 	for _, v := range scores {
 		results = append(results, ColumnProfilePairScores{Left: v.Left, Right: v.Right, Score: v.Score})
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score // descending
+	})
 	return results
 }
 
 func match(left, right ColumnProfile) ColumnProfilePairScores {
-	score := baseTypeScore(left.DType, right.DType)
+	typeScore := baseTypeScore(left.DType, right.DType)
+	nullScore := nullSimilarityScore(left.NullPct, right.NullPct)
+	score := typeScore * nullScore
 	return ColumnProfilePairScores{score, left, right}
+}
+
+func nullSimilarityScore(left, right float64) float64 {
+	return 1 - (math.Abs(left-right) / 100)
 }
 
 func baseTypeScore(a, b Dtype) float64 {
